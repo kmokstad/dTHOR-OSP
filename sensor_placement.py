@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.linalg as sp
 
-from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FuncAnimation, FFMpegWriter
 from os import path
 from sys import argv
 
@@ -51,14 +51,16 @@ def calculate_POD(X, n, mean_centering=True):
 
 # Finding POD basis (Psi_r)
 Psi_r, X_mean = calculate_POD(X, n_POD_components)
+print(f"Range mean original data: [{np.min(X_mean)},{np.max(X_mean)}]")
 
 # Showing the mean and the first 8 POD components
 n_show = 8 if n_POD_components > 8 else n_POD_components
 plt.subplot(3, 3, 1)
-plt.imshow(X_mean.reshape(nY,nX), cmap="jet")
+plt.imshow(X_mean.reshape(nY,nX), cmap="jet", vmin=-0.05, vmax=0.05)
 for i in range(n_show):
     plt.subplot(3, 3, i+2)
-    plt.imshow(Psi_r[:,i].reshape(nY,nX), cmap="jet")
+    plt.imshow(Psi_r[:,i].reshape(nY,nX), cmap="jet", vmin=-0.05, vmax=0.05)
+    print(f"POD {i+1} : [{np.min(Psi_r[:,i])}, {np.max(Psi_r[:,i])}]")
 plt.show()
 
 # Function for finding optimal sensor placement 
@@ -138,7 +140,11 @@ def update_fig(i):
     fig.suptitle(f'Frame #{i}', fontsize=12)
     return img1, img2, img3, fig
 
+mpfile = argv[1].rsplit(".", 1)[0] + "_" + str(n_POD_components) + "POD.mp4"
+print("Saving animation to", mpfile, "...")
 nfr = 100 # X.shape[1]
 fps = 5   # Frames per second
+wrt = FFMpegWriter(fps=fps)
 ani = FuncAnimation(fig, update_fig, frames=nfr, interval=1000/fps)
+ani.save(mpfile, writer=wrt)
 plt.show()
