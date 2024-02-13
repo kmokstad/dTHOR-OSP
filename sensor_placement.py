@@ -11,7 +11,7 @@ from os import path
 from sys import argv
 
 if len(argv) < 2:
-    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors [nX]]]")
+    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors [nX|pixelfile]]]")
 elif not path.isfile(argv[1]):
     raise Exception(f"{argv[1]}: No such file")
 
@@ -21,6 +21,8 @@ X = np.transpose(D[:,1:])  # remove the first (time) column
 # The rows of X are now the image pixels / sampling points
 # and the columns are the time instances
 print("Dimension sensor data array:", X.shape)
+x_min = np.min(X)
+x_max = np.max(X)
 
 # Choose parameters for the sensor placement
 # POD components
@@ -30,11 +32,7 @@ n_POD_components = 5 if len(argv) < 3 else int(argv[2])
 # Number of sensors has to be larger or equal to the number of POD components
 n_sensors = 10 if len(argv) < 4 else int(argv[3])
 
-# Sampling points in each coordinate direction
-# nX*nY has to equal the number of rows in X
-nX = 50 if len(argv) < 5 else int(argv[4])
-nY = int(X.shape[0] / nX)
-print(f"n_POD_components={n_POD_components} n_sensors={n_sensors} nX={nX} nY={nY}")
+print(f"n_POD_components={n_POD_components} n_sensors={n_sensors}")
 
 # Function for finding first n_POD_components using svd
 def calculate_POD(X, n, mean_centering=True):
@@ -53,13 +51,45 @@ def calculate_POD(X, n, mean_centering=True):
 Psi_r, X_mean = calculate_POD(X, n_POD_components)
 print(f"Range mean original data: [{np.min(X_mean)},{np.max(X_mean)}]")
 
+# Function for finding pixel frame dimensions
+def get_img_size(picx, n_pts):
+    if path.isfile(picx):
+        idx = np.transpose(np.loadtxt(picx))
+        return idx.shape[0], idx.shape[1], idx
+    nX = int(picx)
+    return nX, int(n_pts / nX), None
+
+# Sampling points in each coordinate direction
+# nX*nY has to equal the number of rows in X
+n_pts = X.shape[0]
+nX, nY, idx = (50, int(n_pts / 50), None) if len(argv) < 5 else get_img_size(argv[4], n_pts)
+print(f"Frame dimension: {nX}x{nY}")
+
+# Use the "jet" colormap, but with the out-of-range pixels white
+mymap = plt.cm.get_cmap("jet").copy()
+mymap.set_under("w")
+
+# Function for expanding the 1D array into a 2D raster image.
+# Note: Using nX, nY and idx as global variables.
+def remap(X, empty=-1):
+    if idx is None:
+        return X.reshape(nY, nX)
+    data = np.full((nY, nX), float(empty))
+    for j in range(nY):
+        for i in range(nX):
+            if idx[i,j] > 0:
+                data[nY-1-j,i] = X[int(idx[i,j])-1]
+    return data
+
 # Showing the mean and the first 8 POD components
 n_show = 8 if n_POD_components > 8 else n_POD_components
+y_max = max(-x_min, x_max)
 plt.subplot(3, 3, 1)
-plt.imshow(X_mean.reshape(nY,nX), cmap="jet", vmin=-0.05, vmax=0.05)
+plt.imshow(remap(X_mean), vmin=-y_max, vmax=y_max, cmap=mymap)
+y_max = np.max(np.abs(Psi_r[:,:n_show]))
 for i in range(n_show):
     plt.subplot(3, 3, i+2)
-    plt.imshow(Psi_r[:,i].reshape(nY,nX), cmap="jet", vmin=-0.05, vmax=0.05)
+    plt.imshow(remap(Psi_r[:,i]), vmin=-y_max, vmax=y_max, cmap=mymap)
     print(f"POD {i+1} : [{np.min(Psi_r[:,i])}, {np.max(Psi_r[:,i])}]")
 plt.show()
 
@@ -75,7 +105,7 @@ def find_sensor_placement_QR(Psi_r, num_eigen, num_sensors):
 C = find_sensor_placement_QR(Psi_r, n_POD_components, n_sensors)
 
 # Showing the sensor placement
-plt.imshow(np.sum(C, axis=0).reshape(nY,nX), cmap='gray')
+plt.imshow(remap(np.sum(C, axis=0), empty=0), cmap="gray")
 plt.show()
 # The white pixels are the pixels in the image where one measures the image
 
@@ -86,8 +116,6 @@ Y = np.dot(C, (X - np.tile(X_mean, (1,X.shape[1]))))
 Theta = np.linalg.pinv(C @ Psi_r)
 X_hat = np.dot(Psi_r, np.dot(Theta, Y)) + np.tile(X_mean, (1,Y.shape[1]))
 X_err = X - X_hat
-x_min = np.min(X)
-x_max = np.max(X)
 e_min = 0.1*x_min
 e_max = 0.1*x_max
 
@@ -111,32 +139,32 @@ image_index = int(argv[5]) if len(argv) > 5 else np.random.choice(X.shape[1])
 print("Showing the reconstruction of image", image_index)
 
 plt.subplot(4, 1, 1)  # the original image
-plt.imshow(X[:,image_index].reshape(nY,nX), vmin=x_min, vmax=x_max, cmap="jet")
+plt.imshow(remap(X[:,image_index]), vmin=x_min, vmax=x_max, cmap=mymap)
 
-y_img = (Y[:,image_index]*C.T).T.sum(axis=0).reshape(nY,nX)
+y_img = (Y[:,image_index]*C.T).T.sum(axis=0)
 y_max = np.max(np.abs(y_img))
 plt.subplot(4, 1, 2)  # the measurements
-plt.imshow(y_img, cmap="seismic", vmin=-y_max, vmax=y_max)
+plt.imshow(remap(y_img), vmin=-y_max, vmax=y_max, cmap="seismic")
 
 plt.subplot(4, 1, 3)  # the reconstructed image
-plt.imshow(X_hat[:,image_index].reshape(nY,nX), vmin=x_min, vmax=x_max, cmap="jet")
+plt.imshow(remap(X_hat[:,image_index]), vmin=x_min, vmax=x_max, cmap=mymap)
 
 plt.subplot(4, 1, 4)  # error plot
-plt.imshow(X_err[:,image_index].reshape(nY,nX), vmin=e_min, vmax=e_max, cmap="jet")
+plt.imshow(remap(X_err[:,image_index]), vmin=e_min, vmax=e_max, cmap=mymap)
 
 plt.show()
 
 # Now do some animation of the original vs. the reconstructed image
 
 fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
-img1 = ax1.imshow(X[:,0].reshape(nY,nX)    , vmin=x_min, vmax=x_max, cmap="jet", animated=True)
-img2 = ax2.imshow(X_hat[:,0].reshape(nY,nX), vmin=x_min, vmax=x_max, cmap="jet", animated=True)
-img3 = ax3.imshow(X_err[:,0].reshape(nY,nX), vmin=e_min, vmax=e_max, cmap="jet", animated=True)
+img1 = ax1.imshow(remap(X[:,0])    , vmin=x_min, vmax=x_max, cmap=mymap, animated=True)
+img2 = ax2.imshow(remap(X_hat[:,0]), vmin=x_min, vmax=x_max, cmap=mymap, animated=True)
+img3 = ax3.imshow(remap(X_err[:,0]), vmin=e_min, vmax=e_max, cmap=mymap, animated=True)
 
 def update_fig(i):
-    img1.set_array(X[:,i].reshape(nY,nX))
-    img2.set_array(X_hat[:,i].reshape(nY,nX))
-    img3.set_array(X_err[:,i].reshape(nY,nX))
+    img1.set_array(remap(X[:,i]))
+    img2.set_array(remap(X_hat[:,i]))
+    img3.set_array(remap(X_err[:,i]))
     fig.suptitle(f'Frame #{i}', fontsize=12)
     return img1, img2, img3, fig
 
