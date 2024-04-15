@@ -142,9 +142,12 @@ plt.subplot(4, 1, 1)  # the original image
 plt.imshow(remap(X[:,image_index]), vmin=x_min, vmax=x_max, cmap=mymap)
 
 y_img = (Y[:,image_index]*C.T).T.sum(axis=0)
-y_max = np.max(np.abs(y_img))
+for i in range(len(y_img)):
+    if y_img[i] != 0:
+        y_img[i] = 0.6
+
 plt.subplot(4, 1, 2)  # the measurements
-plt.imshow(remap(y_img), vmin=-y_max, vmax=y_max, cmap="seismic")
+plt.imshow(remap(y_img), vmin=-1, vmax=1, cmap="seismic")
 
 plt.subplot(4, 1, 3)  # the reconstructed image
 plt.imshow(remap(X_hat[:,image_index]), vmin=x_min, vmax=x_max, cmap=mymap)
