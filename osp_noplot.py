@@ -35,14 +35,14 @@ print(f"n_POD_components={n_POD_components} n_sensors={n_sensors}")
 # Function for finding first n_POD_components using svd
 def calculate_POD(X, n, mean_centering=True):
     if mean_centering:
-        # Find the mean over the while time series
+        # Find the mean over the whole time series
         X_mean = np.mean(X, axis=1, keepdims=True)
         # Subtract the mean values from each time instance
-        X_ = X - np.tile(X_mean, (1,X.shape[1]))
+        X_ = X - X_mean
     else:
         X_ = X
         X_mean = np.zeros((X.shape[0],1))
-    U, S, V = np.linalg.svd(X_)
+    U, S, V = np.linalg.svd(X_, full_matrices=False)
     return U[:,:n], X_mean
 
 # Finding POD basis (Psi_r)
@@ -61,11 +61,11 @@ def find_sensor_placement_QR(Psi_r, num_eigen, num_sensors):
 C = find_sensor_placement_QR(Psi_r, n_POD_components, n_sensors)
 
 # Create measurements sensor placement
-Y = np.dot(C, (X - np.tile(X_mean, (1,X.shape[1]))))
+Y = np.dot(C, X - X_mean)
 
 # Reconstruct from the measurements
 Theta = np.linalg.pinv(C @ Psi_r)
-X_hat = np.dot(Psi_r, np.dot(Theta, Y)) + np.tile(X_mean, (1,Y.shape[1]))
+X_hat = np.dot(Psi_r, np.dot(Theta, Y)) + X_mean
 X_err = X - X_hat
 
 X_norm = np.linalg.norm(X, axis=0)
