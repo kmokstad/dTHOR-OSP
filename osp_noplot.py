@@ -88,7 +88,10 @@ print(f"Error range:              [{np.min(X_err)},{np.max(X_err)}] Max L2-norm:
 print(f"Max relative error: {100*e_norm/X_norm[ie_pos]}% of L2(X)={X_norm[ie_pos]}")
 
 # Save to file
-hatfile = argv[1].rsplit(".", 1)[0] + "_hat.dat"
-errfile = argv[1].rsplit(".", 1)[0] + "_err.dat"
+filenam = argv[1].rsplit(".", 1)[0] + "_n" + str(n_sensors)
+hatfile = filenam + "_hat.dat"
+errfile = filenam + "_err.dat"
+locfile = filenam + "_loc.dat"
 np.savetxt(hatfile,np.transpose(np.insert(X_hat,0,D[:,0],axis=0)))
 np.savetxt(errfile,np.transpose(np.insert(X_err,0,D[:,0],axis=0)))
+np.savetxt(locfile,P,fmt='%i')
