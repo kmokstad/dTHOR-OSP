@@ -10,8 +10,14 @@ from matplotlib.animation import FuncAnimation, FFMpegWriter
 from os import path
 from sys import argv
 
+if "-show-mean" in argv:
+    argv.remove("-show-mean")
+    show_mean = 1
+else:
+    show_mean = 0
+
 if len(argv) < 2:
-    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors [nX|pixelfile]]]")
+    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors [nX|pixelfile]]] [-show-mean]")
 elif not path.isfile(argv[1]):
     raise Exception(f"{argv[1]}: No such file")
 
@@ -31,7 +37,8 @@ n_POD_components = 5 if len(argv) < 3 else int(argv[2])
 # Sensors
 # Number of sensors has to be larger or equal to the number of POD components
 n_sensors = 10 if len(argv) < 4 else int(argv[3])
-
+if n_sensors < n_POD_components:
+    n_sensors = n_POD_components
 print(f"n_POD_components={n_POD_components} n_sensors={n_sensors}")
 
 # Function for finding first n_POD_components using svd
@@ -82,13 +89,14 @@ def remap(X, empty=-1):
     return data
 
 # Showing the mean and the first 8 POD components
-n_show = 8 if n_POD_components > 8 else n_POD_components
+n_show = 9 - show_mean if n_POD_components >  9 - show_mean else n_POD_components
 y_max = max(-x_min, x_max)
 plt.subplot(3, 3, 1)
-plt.imshow(remap(X_mean), vmin=-y_max, vmax=y_max, cmap=mymap)
+if show_mean:
+    plt.imshow(remap(X_mean), vmin=-y_max, vmax=y_max, cmap=mymap)
 y_max = np.max(np.abs(Psi_r[:,:n_show]))
 for i in range(n_show):
-    plt.subplot(3, 3, i+2)
+    plt.subplot(3, 3, 1+show_mean+i)
     plt.imshow(remap(Psi_r[:,i]), vmin=-y_max, vmax=y_max, cmap=mymap)
     print(f"POD {i+1} : [{np.min(Psi_r[:,i])}, {np.max(Psi_r[:,i])}]")
 plt.show()
@@ -134,6 +142,10 @@ print(f"Max relative error: {100*e_norm/X_norm[ie_pos]}% of L2(X)={X_norm[ie_pos
 
 # Show image measurement and reconstruction of one (random) image
 image_index = int(argv[5]) if len(argv) > 5 else np.random.choice(X.shape[1])
+if image_index == -1:  # show frame with max solution norm
+    image_index = ix_pos
+elif image_index == -2:  # show frame with max error
+    image_index = ie_pos
 print("Showing the reconstruction of image", image_index)
 
 plt.subplot(4, 1, 1)  # the original image
@@ -150,10 +162,10 @@ plt.imshow(remap(y_img), vmin=-1, vmax=1, cmap="seismic")
 plt.subplot(4, 1, 3)  # the reconstructed image
 plt.imshow(remap(X_hat[:,image_index]), vmin=x_min, vmax=x_max, cmap=mymap)
 
-e_min = 0.1*x_min
-e_max = 0.1*x_max
+e_min = np.min(X_err)  # 0.1*x_min
+e_max = np.max(X_err)  # 0.1*x_max
 plt.subplot(4, 1, 4)  # error plot
-plt.imshow(remap(X_err[:,image_index]), vmin=e_min, vmax=e_max, cmap=mymap)
+plt.imshow(remap(X_err[:,image_index]), vmin=min(e_min,-e_max), vmax=max(e_max,-e_min), cmap=mymap)
 
 plt.show()
 
