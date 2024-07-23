@@ -105,8 +105,8 @@ y_max = max(-x_min, x_max)
 plt.subplot(3, 3, 1)
 if show_mean:
     plt.imshow(remap(X_mean), vmin=-y_max, vmax=y_max, cmap=mymap)
-y_max = np.max(np.abs(Psi_r[:,:n_show]))
 for i in range(n_show):
+    y_max = np.max(np.abs(Psi_r[:,i]))
     plt.subplot(3, 3, 1+show_mean+i)
     plt.imshow(remap(Psi_r[:,i]), vmin=-y_max, vmax=y_max, cmap=mymap)
     print(f"POD {i+1} : [{np.min(Psi_r[:,i])}, {np.max(Psi_r[:,i])}]")
@@ -163,8 +163,11 @@ elif image_index == -2:  # show frame with max error
     image_index = ie_pos
 print("Showing the reconstruction of image", image_index)
 
+v_min = np.min(X[:,image_index])
+v_max = np.max(X[:,image_index])
+
 plt.subplot(4, 1, 1)  # the original image
-plt.imshow(remap(X[:,image_index]), vmin=x_min, vmax=x_max, cmap=mymap)
+plt.imshow(remap(X[:,image_index]), vmin=min(v_min,-v_max), vmax=max(v_max,-v_min), cmap=mymap)
 
 y_img = (Y[:,image_index]*C.T).T.sum(axis=0)
 y_img = [ 0.0 if y_val == 0 else 0.6 for y_val in y_img ]
@@ -173,7 +176,7 @@ plt.subplot(4, 1, 2)  # the measurements
 plt.imshow(remap(y_img), vmin=-1, vmax=1, cmap="seismic")
 
 plt.subplot(4, 1, 3)  # the reconstructed image
-plt.imshow(remap(X_hat[:,image_index]), vmin=x_min, vmax=x_max, cmap=mymap)
+plt.imshow(remap(X_hat[:,image_index]), vmin=min(v_min,-v_max), vmax=max(v_max,-v_min), cmap=mymap)
 
 e_min = np.min(X_err)  # 0.1*x_min
 e_max = np.max(X_err)  # 0.1*x_max
