@@ -2,23 +2,34 @@
 Calculation of optimal sensor placements from a FE solution.
 """
 
+import sys
+
+from os import path
+from sys import argv
+
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.linalg as sp
 
 from matplotlib.animation import FuncAnimation, FFMpegWriter
-from os import path
-from sys import argv
+
+sys.tracebacklimit = 0
 
 if "-show-mean" in argv:
     argv.remove("-show-mean")
     show_mean = 1
 else:
     show_mean = 0
+if "-no-anim" in argv:
+    argv.remove("-no-anim")
+    show_anim = False
+else:
+    show_anim = True
 
 if len(argv) < 2:
-    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors [nX|pixelfile]]] [-show-mean]")
-elif not path.isfile(argv[1]):
+    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors [nX|pixelfile]]]"
+                    " [-show-mean] [-no-anim]")
+if not path.isfile(argv[1]):
     raise Exception(f"{argv[1]}: No such file")
 
 # Loading data
@@ -36,13 +47,11 @@ n_POD_components = 5 if len(argv) < 3 else int(argv[2])
 
 # Sensors
 # Number of sensors has to be larger or equal to the number of POD components
-n_sensors = 10 if len(argv) < 4 else int(argv[3])
-if n_sensors < n_POD_components:
-    n_sensors = n_POD_components
+n_sensors = max(10 if len(argv) < 4 else int(argv[3]), n_POD_components)
 print(f"n_POD_components={n_POD_components} n_sensors={n_sensors}")
 
-# Function for finding first n_POD_components using svd
 def calculate_POD(X, n, mean_centering=True):
+    """Function for finding first n_POD_components using svd."""
     if mean_centering:
         # Find the mean over the whole time series
         X_mean = np.mean(X, axis=1, keepdims=True)
@@ -58,8 +67,8 @@ def calculate_POD(X, n, mean_centering=True):
 Psi_r, X_mean = calculate_POD(X, n_POD_components)
 print(f"Range mean original data: [{np.min(X_mean)},{np.max(X_mean)}]")
 
-# Function for finding pixel frame dimensions
 def get_img_size(picx, n_pts):
+    """Function for finding pixel frame dimensions."""
     if path.isfile(picx):
         idx = np.transpose(np.loadtxt(picx))
         return idx.shape[0], idx.shape[1], idx
@@ -76,11 +85,13 @@ print(f"Frame dimension: {nX}x{nY}")
 mymap = plt.cm.get_cmap("jet").copy()
 mymap.set_under("w")
 
-# Function for expanding the 1D array into a 2D raster image.
-# Note: Using nX, nY and idx as global variables.
 def remap(X, empty=-1):
+    """
+    Function for expanding the 1D array or list into a 2D raster image.
+    Note: Using nX, nY and idx as global variables.
+    """
     if idx is None:
-        return X.reshape(nY, nX)
+        return X.reshape(nY, nX) if isinstance(X, np.ndarray) else np.array(X).reshape(nY, nX)
     data = np.full((nY, nX), float(empty))
     for j in range(nY):
         for i in range(nX):
@@ -101,8 +112,8 @@ for i in range(n_show):
     print(f"POD {i+1} : [{np.min(Psi_r[:,i])}, {np.max(Psi_r[:,i])}]")
 plt.show()
 
-# Function for finding optimal sensor placement
 def find_sensor_placement_QR(Psi_r, num_eigen, num_sensors):
+    """Function for finding optimal sensor placement."""
     M = Psi_r @ Psi_r.T if num_sensors > num_eigen else Psi_r.T
     Q, R, P = sp.qr(M, pivoting=True)
     C = np.zeros((num_sensors, Psi_r.shape[0]))
@@ -135,9 +146,13 @@ ix_pos = np.argmax(X_norm)
 iy_pos = np.argmax(Y_norm)
 ie_pos = np.argmax(E_norm)
 
-print(f"Range original data:      [{x_min},{x_max}] Max L2-norm: {x_norm} at step {ix_pos+1}")
-print(f"Range reconstructed data: [{np.min(X_hat)},{np.max(X_hat)}] Max L2-norm: {y_norm} at step {iy_pos+1}")
-print(f"Error range:              [{np.min(X_err)},{np.max(X_err)}] Max L2-norm: {e_norm} at step {ie_pos+1}")
+print("Range original data:      "
+      f"[{x_min},{x_max}] Max L2-norm: {x_norm} at step {ix_pos+1}")
+print("Range reconstructed data: "
+      f"[{np.min(X_hat)},{np.max(X_hat)}] Max L2-norm: {y_norm} at step {iy_pos+1}")
+print("Error range:              "
+      f"[{np.min(X_err)},{np.max(X_err)}] Max L2-norm: {e_norm} at step {ie_pos+1}")
+
 print(f"Max relative error: {100*e_norm/X_norm[ie_pos]}% of L2(X)={X_norm[ie_pos]}")
 
 # Show image measurement and reconstruction of one (random) image
@@ -152,9 +167,7 @@ plt.subplot(4, 1, 1)  # the original image
 plt.imshow(remap(X[:,image_index]), vmin=x_min, vmax=x_max, cmap=mymap)
 
 y_img = (Y[:,image_index]*C.T).T.sum(axis=0)
-for i in range(len(y_img)):
-    if y_img[i] != 0:
-        y_img[i] = 0.6
+y_img = [ 0.0 if y_val == 0 else 0.6 for y_val in y_img ]
 
 plt.subplot(4, 1, 2)  # the measurements
 plt.imshow(remap(y_img), vmin=-1, vmax=1, cmap="seismic")
@@ -169,6 +182,9 @@ plt.imshow(remap(X_err[:,image_index]), vmin=min(e_min,-e_max), vmax=max(e_max,-
 
 plt.show()
 
+if not show_anim:
+    sys.exit(0)
+
 # Now do some animation of the original vs. the reconstructed image
 
 fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
@@ -177,6 +193,7 @@ img2 = ax2.imshow(remap(X_hat[:,0]), vmin=x_min, vmax=x_max, cmap=mymap, animate
 img3 = ax3.imshow(remap(X_err[:,0]), vmin=e_min, vmax=e_max, cmap=mymap, animated=True)
 
 def update_fig(i):
+    """Creates a new frame for the animation. """
     img1.set_array(remap(X[:,i]))
     img2.set_array(remap(X_hat[:,i]))
     img3.set_array(remap(X_err[:,i]))
