@@ -9,13 +9,16 @@ from os import path
 from sys import argv
 
 if len(argv) < 2:
-    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors]]")
+    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors [n_ignore]]]")
 elif not path.isfile(argv[1]):
     raise Exception(f"{argv[1]}: No such file")
 
+# Number of initial steps to skip
+n_skip = 0 if len(argv) < 5 else int(argv[4])
+
 # Loading data
 D = np.loadtxt(argv[1])
-X = np.transpose(D[:,1:])  # remove the first (time) column
+X = np.transpose(D[n_skip:,1:])  # remove the first (time) column and n_skip rows
 # The rows of X are now the image pixels / sampling points
 # and the columns are the time instances
 print("Dimension sensor data array:", X.shape)
@@ -30,7 +33,7 @@ n_POD_components = 5 if len(argv) < 3 else int(argv[2])
 # Number of sensors has to be larger or equal to the number of POD components
 n_sensors = 10 if len(argv) < 4 else int(argv[3])
 
-print(f"n_POD_components={n_POD_components} n_sensors={n_sensors}")
+print(f"n_POD_components={n_POD_components} n_sensors={n_sensors} n_skip={n_skip}")
 
 # Function for finding first n_POD_components using svd
 def calculate_POD(X, n, mean_centering=True):
@@ -95,6 +98,6 @@ filenam = argv[1].rsplit(".", 1)[0] + "_n" + str(n_sensors)
 hatfile = filenam + "_hat.dat"
 errfile = filenam + "_err.dat"
 locfile = filenam + "_loc.dat"
-np.savetxt(hatfile,np.transpose(np.insert(X_hat,0,D[:,0],axis=0)))
-np.savetxt(errfile,np.transpose(np.insert(X_err,0,D[:,0],axis=0)))
+np.savetxt(hatfile,np.transpose(np.insert(X_hat,0,D[n_skip:,0],axis=0)))
+np.savetxt(errfile,np.transpose(np.insert(X_err,0,D[n_skip:,0],axis=0)))
 np.savetxt(locfile,P,fmt='%i')

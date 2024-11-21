@@ -27,14 +27,17 @@ else:
     show_anim = True
 
 if len(argv) < 2:
-    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors [nX|pixelfile]]]"
+    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors [nX|pixelfile [n_skip]]]]"
                     " [-show-mean] [-no-anim]")
 if not path.isfile(argv[1]):
     raise Exception(f"{argv[1]}: No such file")
 
+# Number of initial steps to skip
+n_skip = 0 if len(argv) < 6 else int(argv[5])
+
 # Loading data
 D = np.loadtxt(argv[1])
-X = np.transpose(D[:,1:])  # remove the first (time) column
+X = np.transpose(D[n_skip:,1:])  # remove the first (time) column and n_skip rows
 # The rows of X are now the image pixels / sampling points
 # and the columns are the time instances
 print("Dimension sensor data array:", X.shape)
@@ -156,7 +159,7 @@ print("Error range:              "
 print(f"Max relative error: {100*e_norm/X_norm[ie_pos]}% of L2(X)={X_norm[ie_pos]}")
 
 # Show image measurement and reconstruction of one (random) image
-image_index = int(argv[5]) if len(argv) > 5 else np.random.choice(X.shape[1])
+image_index = int(argv[6]) if len(argv) > 6 else np.random.choice(X.shape[1])
 if image_index == -1:  # show frame with max solution norm
     image_index = ix_pos
 elif image_index == -2:  # show frame with max error
@@ -205,7 +208,7 @@ def update_fig(i):
 
 mpfile = argv[1].rsplit(".", 1)[0] + "_" + str(n_POD_components) + "POD.mp4"
 print("Saving animation to", mpfile, "...")
-nfr = 100 # X.shape[1]
+nfr = X.shape[1] if X.shape[1] < 100 else 100
 fps = 5   # Frames per second
 wrt = FFMpegWriter(fps=fps)
 ani = FuncAnimation(fig, update_fig, frames=nfr, interval=1000/fps)
