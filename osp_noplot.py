@@ -98,6 +98,6 @@ filenam = argv[1].rsplit(".", 1)[0] + "_n" + str(n_sensors)
 hatfile = filenam + "_hat.dat"
 errfile = filenam + "_err.dat"
 locfile = filenam + "_loc.dat"
-np.savetxt(hatfile,np.transpose(np.insert(X_hat,0,D[n_skip:,0],axis=0)))
-np.savetxt(errfile,np.transpose(np.insert(X_err,0,D[n_skip:,0],axis=0)))
-np.savetxt(locfile,P,fmt='%i')
+np.savetxt(hatfile,np.transpose(np.insert(X_hat,0,D[n_skip:,0],axis=0)),fmt="%.6g")
+np.savetxt(errfile,np.transpose(np.insert(X_err,0,D[n_skip:,0],axis=0)),fmt="%.6g")
+np.savetxt(locfile,P,fmt="%i")
