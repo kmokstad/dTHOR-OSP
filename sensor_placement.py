@@ -2,18 +2,13 @@
 Calculation of optimal sensor placements from a FE solution.
 """
 
-import sys
-
 from os import path
 from sys import argv
 
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.linalg as sp
-
-from matplotlib.animation import FuncAnimation, FFMpegWriter
-
-sys.tracebacklimit = 0
+from matplotlib.animation import FFMpegWriter, FuncAnimation
 
 if "-show-mean" in argv:
     argv.remove("-show-mean")
@@ -27,7 +22,7 @@ else:
     show_anim = True
 
 if len(argv) < 2:
-    raise Exception(f"usage: python3 {argv[0]} datafile [n_PODs [n_sensors [nX|pixelfile [n_skip]]]]"
+    raise Exception(f"usage: python {argv[0]} datafile [n_PODs [n_sensors [nX|pixelfile [n_skip]]]]"
                     " [-show-mean] [-no-anim]")
 if not path.isfile(argv[1]):
     raise Exception(f"{argv[1]}: No such file")
@@ -53,8 +48,11 @@ n_POD_components = 5 if len(argv) < 3 else int(argv[2])
 n_sensors = max(10 if len(argv) < 4 else int(argv[3]), n_POD_components)
 print(f"n_POD_components={n_POD_components} n_sensors={n_sensors}")
 
-def calculate_POD(X, n, mean_centering=True):
-    """Function for finding first n_POD_components using svd."""
+def calculate_POD(n, mean_centering=True):
+    """
+    Function for finding first n_POD_components using svd.
+    Note: Using X as global variable.
+    """
     if mean_centering:
         # Find the mean over the whole time series
         X_mean = np.mean(X, axis=1, keepdims=True)
@@ -63,20 +61,20 @@ def calculate_POD(X, n, mean_centering=True):
     else:
         X_ = X
         X_mean = np.zeros((X.shape[0],1))
-    U, S, V = np.linalg.svd(X_, full_matrices=False)
+    U, _, _ = np.linalg.svd(X_, full_matrices=False)
     return U[:,:n], X_mean
 
 # Finding POD basis (Psi_r)
-Psi_r, X_mean = calculate_POD(X, n_POD_components)
-print(f"Range mean original data: [{np.min(X_mean)},{np.max(X_mean)}]")
+Psi_r, X_MEAN = calculate_POD(n_POD_components)
+print(f"Range mean original data: [{np.min(X_MEAN)},{np.max(X_MEAN)}]")
 
-def get_img_size(picx, n_pts):
+def get_img_size(picx, n_pt):
     """Function for finding pixel frame dimensions."""
     if path.isfile(picx):
-        idx = np.transpose(np.loadtxt(picx))
-        return idx.shape[0], idx.shape[1], idx
-    nX = int(picx)
-    return nX, int(n_pts / nX), None
+        indx = np.transpose(np.loadtxt(picx))
+        return indx.shape[0], indx.shape[1], indx
+    n_x = int(picx)
+    return n_x, int(n_pt / n_x), None
 
 # Sampling points in each coordinate direction
 # nX*nY has to equal the number of rows in X
@@ -88,18 +86,18 @@ print(f"Frame dimension: {nX}x{nY}")
 mymap = plt.cm.get_cmap("jet").copy()
 mymap.set_under("w")
 
-def remap(X, empty=-1):
+def remap(x, empty=-1):
     """
     Function for expanding the 1D array or list into a 2D raster image.
     Note: Using nX, nY and idx as global variables.
     """
     if idx is None:
-        return X.reshape(nY, nX) if isinstance(X, np.ndarray) else np.array(X).reshape(nY, nX)
+        return x.reshape(nY, nX) if isinstance(x, np.ndarray) else np.array(x).reshape(nY, nX)
     data = np.full((nY, nX), float(empty))
     for j in range(nY):
         for i in range(nX):
             if idx[i,j] > 0:
-                data[nY-1-j,i] = X[int(idx[i,j])-1]
+                data[nY-1-j,i] = x[int(idx[i,j])-1]
     return data
 
 # Showing the mean and the first 8 POD components
@@ -107,24 +105,27 @@ n_show = 9 - show_mean if n_POD_components >  9 - show_mean else n_POD_component
 y_max = max(-x_min, x_max)
 plt.subplot(3, 3, 1)
 if show_mean:
-    plt.imshow(remap(X_mean), vmin=-y_max, vmax=y_max, cmap=mymap)
-for i in range(n_show):
-    y_max = np.max(np.abs(Psi_r[:,i]))
-    plt.subplot(3, 3, 1+show_mean+i)
-    plt.imshow(remap(Psi_r[:,i]), vmin=-y_max, vmax=y_max, cmap=mymap)
-    print(f"POD {i+1} : [{np.min(Psi_r[:,i])}, {np.max(Psi_r[:,i])}]")
+    plt.imshow(remap(X_MEAN), vmin=-y_max, vmax=y_max, cmap=mymap)
+for k in range(n_show):
+    y_max = np.max(np.abs(Psi_r[:,k]))
+    plt.subplot(3, 3, 1+show_mean+k)
+    plt.imshow(remap(Psi_r[:,k]), vmin=-y_max, vmax=y_max, cmap=mymap)
+    print(f"POD {k+1} : [{np.min(Psi_r[:,k])}, {np.max(Psi_r[:,k])}]")
 plt.show()
 
-def find_sensor_placement_QR(Psi_r, num_eigen, num_sensors):
-    """Function for finding optimal sensor placement."""
+def find_sensor_placement_QR(num_eigen, num_sensors):
+    """
+    Function for finding optimal sensor placement.
+    Note: Using Psi_r as global variable.
+    """
     M = Psi_r @ Psi_r.T if num_sensors > num_eigen else Psi_r.T
-    Q, R, P = sp.qr(M, pivoting=True)
-    C = np.zeros((num_sensors, Psi_r.shape[0]))
-    C[np.arange(num_sensors), P[:num_sensors]] = 1
-    return C
+    _, _, P = sp.qr(M, pivoting=True)
+    c = np.zeros((num_sensors, Psi_r.shape[0]))
+    c[np.arange(num_sensors), P[:num_sensors]] = 1
+    return c
 
 # Finding the sensor placement matrix C
-C = find_sensor_placement_QR(Psi_r, n_POD_components, n_sensors)
+C = find_sensor_placement_QR(n_POD_components, n_sensors)
 
 # Showing the sensor placement
 plt.imshow(remap(np.sum(C, axis=0), empty=0), cmap="gray")
@@ -132,11 +133,11 @@ plt.show()
 # The white pixels are the pixels in the image where one measures the image
 
 # Create measurements sensor placement
-Y = np.dot(C, X - X_mean)
+Y = np.dot(C, X - X_MEAN)
 
 # Reconstruct from the measurements
 Theta = np.linalg.pinv(C @ Psi_r)
-X_hat = np.dot(Psi_r, np.dot(Theta, Y)) + X_mean
+X_hat = np.dot(Psi_r, np.dot(Theta, Y)) + X_MEAN
 X_err = X - X_hat
 
 X_norm = np.linalg.norm(X, axis=0)
@@ -188,29 +189,26 @@ plt.imshow(remap(X_err[:,image_index]), vmin=min(e_min,-e_max), vmax=max(e_max,-
 
 plt.show()
 
-if not show_anim:
-    sys.exit(0)
+if show_anim:
+    # Now do some animation of the original vs. the reconstructed image
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
+    img1 = ax1.imshow(remap(X[:,0])    , vmin=x_min, vmax=x_max, cmap=mymap, animated=True)
+    img2 = ax2.imshow(remap(X_hat[:,0]), vmin=x_min, vmax=x_max, cmap=mymap, animated=True)
+    img3 = ax3.imshow(remap(X_err[:,0]), vmin=e_min, vmax=e_max, cmap=mymap, animated=True)
 
-# Now do some animation of the original vs. the reconstructed image
+    def update_fig(i):
+        """Creates a new frame for the animation."""
+        img1.set_array(remap(X[:,i]))
+        img2.set_array(remap(X_hat[:,i]))
+        img3.set_array(remap(X_err[:,i]))
+        fig.suptitle(f'Frame #{i}', fontsize=12)
+        return img1, img2, img3, fig
 
-fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
-img1 = ax1.imshow(remap(X[:,0])    , vmin=x_min, vmax=x_max, cmap=mymap, animated=True)
-img2 = ax2.imshow(remap(X_hat[:,0]), vmin=x_min, vmax=x_max, cmap=mymap, animated=True)
-img3 = ax3.imshow(remap(X_err[:,0]), vmin=e_min, vmax=e_max, cmap=mymap, animated=True)
-
-def update_fig(i):
-    """Creates a new frame for the animation. """
-    img1.set_array(remap(X[:,i]))
-    img2.set_array(remap(X_hat[:,i]))
-    img3.set_array(remap(X_err[:,i]))
-    fig.suptitle(f'Frame #{i}', fontsize=12)
-    return img1, img2, img3, fig
-
-mpfile = argv[1].rsplit(".", 1)[0] + "_" + str(n_POD_components) + "POD.mp4"
-print("Saving animation to", mpfile, "...")
-nfr = X.shape[1] if X.shape[1] < 100 else 100
-fps = 5   # Frames per second
-wrt = FFMpegWriter(fps=fps)
-ani = FuncAnimation(fig, update_fig, frames=nfr, interval=1000/fps)
-ani.save(mpfile, writer=wrt)
-plt.show()
+    mpfile = argv[1].rsplit(".", 1)[0] + "_" + str(n_POD_components) + "POD.mp4"
+    print("Saving animation to", mpfile, "...")
+    nfr = X.shape[1] if X.shape[1] < 100 else 100
+    fps = 5   # Frames per second
+    wrt = FFMpegWriter(fps=fps)
+    ani = FuncAnimation(fig, update_fig, frames=nfr, interval=1000/fps)
+    ani.save(mpfile, writer=wrt)
+    plt.show()
