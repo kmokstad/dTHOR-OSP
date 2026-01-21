@@ -11,7 +11,7 @@ for doing the main core of the computations.
 Usage:
 
     python3 sensor_placement.py <datafile> <num_POD> <num_sensor> [<nX>|<pixelfile> [<image_idx>]]
-    python3 osp_noplot.py <datafile> <num_POD> <num_sensor>
+    python3 osp_noplot.py <datafile> <num_POD> <num_sensor> [<num_skip> [<sensor_list>]]
 
 The first script [sensor_placement.py](sensor_placement.py) works for 2D problems only,
 where the values in `<datafile>` are samples in a Cartesian grid.
@@ -28,6 +28,12 @@ and contains no plotting. It only computes the optimal locations of the
 specified number of sensors, the reconstructed data field based on the sensor
 values, as well as the error (difference between the original and reconstructed
 data fields). All these calculations are also performed by the first script.
+
+The optional `<num_skip>` parameter can be used to skip the given number of
+initial frames from the `<datafile>`, to ignore initial transients in the simulation results.
+`<sensor_list>` is an optional file containing a list if predefined sensor indices.
+If specified, a constrained OSP is performed where the sepcified number of sensors comes
+in addition to the predefined ones.
 
 The results from the second script are saved to ASCII-files for visualization by external programs.
 For instance, if the `<datafile>` here contains the time history of a nodal result quantity,
