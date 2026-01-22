@@ -120,27 +120,31 @@ else:  # Using the old procedure (should be similar to Method 2 above)
 
 X_err = X - X_hat
 
+def print_range(heading, V, V_ref=None):
+    """Prints some characteristics of a numerical vector."""
+    _x_min = np.min(V)
+    _x_max = np.max(V)
+    x_norm = np.linalg.norm(V, axis=0)
+    x_nmax = np.max(x_norm)
+    ix_pos = np.argmax(x_norm)
+    if V_ref is None:
+        print(f"{heading} [{_x_min},{_x_max}] Max L2-norm: {x_nmax} at step {ix_pos+1}")
+    else:
+        x_ref = np.linalg.norm(V_ref, axis=0)[ix_pos]
+        print(f"{heading} [{_x_min},{_x_max}] Max L2-norm: {x_nmax} at step {ix_pos+1}"
+              f" ({100*x_nmax/x_ref}% of L2(X)={x_ref})")
+
+print_range("Range original data:     ", X)
+print_range("Range reconstructed data:", X_hat)
+print_range("Error range:             ", X_err, X)
+
 X_norm = np.linalg.norm(X, axis=0)
-Y_norm = np.linalg.norm(X_hat, axis=0)
 E_norm = np.linalg.norm(X_err, axis=0)
-x_norm = np.max(X_norm)
-y_norm = np.max(Y_norm)
-e_norm = np.max(E_norm)
 r_norm = E_norm / X_norm
-ix_pos = np.argmax(X_norm)
-iy_pos = np.argmax(Y_norm)
-ie_pos = np.argmax(E_norm)
 ir_pos = np.argmax(r_norm)
 Xn_ref = np.mean(X_norm)
-
-print(f"Range original data:      [{x_min},{x_max}] Max L2-norm: {x_norm} at step {ix_pos+1}")
-print(f"Range reconstructed data: [{np.min(X_hat)},{np.max(X_hat)}]"
-      f" Max L2-norm: {y_norm} at step {iy_pos+1}")
-print(f"Error range:              [{np.min(X_err)},{np.max(X_err)}]"
-      f" Max L2-norm: {e_norm} at step {ie_pos+1}",
-      f" ({100*e_norm/X_norm[ie_pos]}% of L2(X)={X_norm[ie_pos]})")
 print(f"Max relative error: {100*np.max(r_norm)}% of L2(X)={X_norm[ir_pos]} at step {ir_pos+1}",
-      f" or {100*e_norm/Xn_ref}% of mean(L2(X))={Xn_ref}")
+      f" or {100*np.max(E_norm)/Xn_ref}% of mean(L2(X))={Xn_ref}")
 
 # Save to file
 filenam = argv[1].rsplit(".", 1)[0] + "_n" + str(n_sensors)
