@@ -10,6 +10,8 @@ import numpy as np
 import scipy.linalg as sp
 from matplotlib.animation import FFMpegWriter, FuncAnimation
 
+from osp_core import OptimalSensorPlacement
+
 if "-show-mean" in argv:
     argv.remove("-show-mean")
     show_mean = 1
@@ -39,6 +41,9 @@ print("Dimension sensor data array:", X.shape)
 x_min = np.min(X)
 x_max = np.max(X)
 
+# Which frame to plot results for
+image_index = int(argv[6]) if len(argv) > 6 else np.random.choice(X.shape[1])
+
 # Choose parameters for the sensor placement
 # POD components
 n_POD_components = 5 if len(argv) < 3 else int(argv[2])
@@ -47,6 +52,13 @@ n_POD_components = 5 if len(argv) < 3 else int(argv[2])
 # Number of sensors has to be larger or equal to the number of POD components
 n_sensors = max(10 if len(argv) < 4 else int(argv[3]), n_POD_components)
 print(f"n_POD_components={n_POD_components} n_sensors={n_sensors}")
+
+# Predefined sensors
+sensor_list = []
+if len(argv) > 7 and path.isfile(argv[7]):
+    with open(argv[7], 'r', encoding='utf-8') as fd:
+        sensors = fd.read()
+        sensor_list = [int(n) for n in sensors.split()]
 
 def calculate_POD(n, mean_centering=True):
     """
@@ -166,40 +178,50 @@ Xn_ref = np.mean(X_norm)
 print(f"Max relative error: {100*np.max(r_norm)}% of L2(X)={X_norm[ir_pos]} at step {ir_pos+1}",
       f" or {100*np.max(E_norm)/Xn_ref}% of mean(L2(X))={Xn_ref}")
 
-# Show image measurement and reconstruction of one (random) image
-image_index = int(argv[6]) if len(argv) > 6 else np.random.choice(X.shape[1])
-if image_index == -1:  # show frame with max solution norm
-    image_index = np.argmax(X_norm)
-elif image_index == -2:  # show frame with max error
-    image_index = np.argmax(E_norm)
-elif image_index == -3:  # show frame with max relative error
-    image_index = np.argmax(r_norm)
-print("Showing the reconstruction of image", image_index+1)
+def plot_results(S, img_index):
+    """
+    Plots the OSP results.
+    Note: Using X, Y, X_hat, X_err, X_norm, E_norm and r_norm as global variables.
+    """
+    # Show image measurement and reconstruction of one (random) image
+    if img_index == -1:  # show frame with max solution norm
+        iidx = np.argmax(X_norm)
+    elif img_index == -2:  # show frame with max error
+        iidx = np.argmax(E_norm)
+    elif img_index == -3:  # show frame with max relative error
+        iidx = np.argmax(r_norm)
+    else:
+        iidx = img_index
+    print("Showing the reconstruction of image", iidx+1)
 
-v_min = np.min(X[:,image_index])
-v_max = np.max(X[:,image_index])
+    v_min = np.min(X[:,iidx])
+    v_max = np.max(X[:,iidx])
 
-plt.subplot(4, 1, 1)  # the original image
-plt.imshow(remap(X[:,image_index]), vmin=min(v_min,-v_max), vmax=max(v_max,-v_min), cmap=mymap)
+    plt.subplot(4, 1, 1)  # the original image
+    plt.imshow(remap(X[:,iidx]), vmin=min(v_min,-v_max), vmax=max(v_max,-v_min), cmap=mymap)
 
-y_img = (Y[:,image_index]*C.T).T.sum(axis=0)
-y_img = [ 0.0 if y_val == 0 else 0.6 for y_val in y_img ]
+    y_img = (Y[:,iidx]*S.T).T.sum(axis=0)
+    y_img = [ 0.0 if y_val == 0 else 0.6 for y_val in y_img ]
 
-plt.subplot(4, 1, 2)  # the measurements
-plt.imshow(remap(y_img), vmin=-1, vmax=1, cmap="seismic")
+    plt.subplot(4, 1, 2)  # the measurements
+    plt.imshow(remap(y_img), vmin=-1, vmax=1, cmap="seismic")
 
-plt.subplot(4, 1, 3)  # the reconstructed image
-plt.imshow(remap(X_hat[:,image_index]), vmin=min(v_min,-v_max), vmax=max(v_max,-v_min), cmap=mymap)
+    plt.subplot(4, 1, 3)  # the reconstructed image
+    plt.imshow(remap(X_hat[:,iidx]), vmin=min(v_min,-v_max), vmax=max(v_max,-v_min), cmap=mymap)
 
-e_min = np.min(X_err)  # 0.1*x_min
-e_max = np.max(X_err)  # 0.1*x_max
-plt.subplot(4, 1, 4)  # error plot
-plt.imshow(remap(X_err[:,image_index]), vmin=min(e_min,-e_max), vmax=max(e_max,-e_min), cmap=mymap)
+    _min = np.min(X_err)
+    _max = np.max(X_err)
+    plt.subplot(4, 1, 4)  # error plot
+    plt.imshow(remap(X_err[:,iidx]), vmin=min(_min,-_max), vmax=max(_max,-_min), cmap=mymap)
 
-plt.show()
+    plt.show()
+
+plot_results(C, image_index)
 
 if show_anim:
     # Now do some animation of the original vs. the reconstructed image
+    e_min = np.min(X_err)
+    e_max = np.max(X_err)
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
     img1 = ax1.imshow(remap(X[:,0])    , vmin=x_min, vmax=x_max, cmap=mymap, animated=True)
     img2 = ax2.imshow(remap(X_hat[:,0]), vmin=x_min, vmax=x_max, cmap=mymap, animated=True)
@@ -221,3 +243,33 @@ if show_anim:
     ani = FuncAnimation(fig, update_fig, frames=nfr, interval=1000/fps)
     ani.save(mpfile, writer=wrt)
     plt.show()
+
+if len(sensor_list) > 0:  # Using Adil Rasheed's new OSP module
+    osp = OptimalSensorPlacement(len(sensor_list) + n_POD_components)
+    osp.fit(X - X_MEAN)
+
+    n_total = len(sensor_list) + n_sensors
+    print(f"Preselected sensors: {sensor_list}")
+    print(f"Adding {n_sensors} new sensors")
+    locs = osp.select_sensors(n_total, preselected=sensor_list)
+    print("All sensor locations:", locs)
+
+    # Get sensor measurements
+    Y = X[locs, :] - X_MEAN[locs, :]
+
+    # Reconstruct from the measurements
+    X_hat = osp.reconstruct(Y, locs) + X_MEAN
+    X_err = X - X_hat
+    print_range("Range original data:     ", X)
+    print_range("Range reconstructed data:", X_hat)
+    print_range("Error range:             ", X_err, X)
+
+    X_norm = np.linalg.norm(X, axis=0)
+    E_norm = np.linalg.norm(X_err, axis=0)
+    r_norm = E_norm / X_norm
+    ir_pos = np.argmax(r_norm)
+    Xn_ref = np.mean(X_norm)
+    print(f"Max relative error: {100*np.max(r_norm)}% of L2(X)={X_norm[ir_pos]} at step {ir_pos+1}",
+          f" or {100*np.max(E_norm)/Xn_ref}% of mean(L2(X))={Xn_ref}")
+
+    plot_results(osp.get_measurement_matrix(locs), image_index)
